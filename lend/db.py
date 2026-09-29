@@ -48,3 +48,22 @@ def connect():
 def init_db():
     with connect() as connection:
         connection.executescript(SCHEMA)
+
+
+def database_summary():
+    path = database_path()
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM tools) AS tools,
+              (SELECT COUNT(*) FROM members) AS members,
+              (SELECT COUNT(*) FROM loans) AS loans
+            """
+        ).fetchone()
+    return {
+        "path": str(path),
+        "tools": row["tools"],
+        "members": row["members"],
+        "loans": row["loans"],
+    }

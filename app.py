@@ -1,8 +1,8 @@
 import os
 
-from flask import Flask
+from flask import Flask, render_template
 
-from lend.db import init_db
+from lend.db import database_summary, init_db
 
 
 def create_app():
@@ -10,7 +10,7 @@ def create_app():
 
     @app.get("/")
     def home():
-        return "Lend is running."
+        return render_template("home.html", summary=database_summary())
 
     return app
 
