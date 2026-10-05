@@ -6,6 +6,7 @@ from lend.catalog import CatalogError, ToolIsOut, ToolNotFound, add_tool, list_t
 from lend.db import connect, database_summary, init_db
 from lend.loans import (
     LoanError,
+    LoanNotFound,
     MemberNotFound,
     ToolUnavailable,
     add_member,
@@ -13,6 +14,7 @@ from lend.loans import (
     list_available_tools,
     list_members,
     list_open_loans,
+    return_tool,
 )
 
 
@@ -94,6 +96,17 @@ def create_app():
         except ValueError:
             return redirect(url_for("loans", error="Choose a member and an available tool."))
         except (MemberNotFound, ToolUnavailable) as error:
+            return redirect(url_for("loans", error=str(error)))
+        finally:
+            connection.close()
+        return redirect(url_for("loans"))
+
+    @app.post("/loans/<int:loan_id>/return")
+    def return_loan(loan_id):
+        connection = connect()
+        try:
+            return_tool(connection, loan_id)
+        except LoanNotFound as error:
             return redirect(url_for("loans", error=str(error)))
         finally:
             connection.close()

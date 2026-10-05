@@ -16,6 +16,10 @@ class ToolUnavailable(LoanError):
     pass
 
 
+class LoanNotFound(LoanError):
+    pass
+
+
 def add_member(connection, name, email):
     name = name.strip()
     email = email.strip().lower()
@@ -55,7 +59,15 @@ def list_available_tools(connection):
     return [{"id": row["id"], "name": row["name"]} for row in rows]
 
 
-def list_open_loans(connection):
+def is_overdue(due_at, returned_at, now):
+    if returned_at is not None:
+        return False
+    return datetime.fromisoformat(now) > datetime.fromisoformat(due_at)
+
+
+def list_open_loans(connection, now=None):
+    if now is None:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rows = connection.execute(
         """
         SELECT loans.id, loans.borrowed_at, loans.due_at,
@@ -74,6 +86,7 @@ def list_open_loans(connection):
             "member_name": row["member_name"],
             "borrowed_at": row["borrowed_at"],
             "due_at": row["due_at"],
+            "overdue": is_overdue(row["due_at"], None, now),
         }
         for row in rows
     ]
@@ -124,3 +137,21 @@ def borrow_tool(connection, tool_id, member_id, now=None):
     except LoanError:
         connection.rollback()
         raise
+
+
+def return_tool(connection, loan_id, now=None):
+    if now is None:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    loan = connection.execute(
+        "SELECT id, returned_at FROM loans WHERE id = ?",
+        (loan_id,),
+    ).fetchone()
+    if loan is None:
+        raise LoanNotFound("That loan does not exist.")
+    if loan["returned_at"] is not None:
+        return
+    connection.execute(
+        "UPDATE loans SET returned_at = ? WHERE id = ?",
+        (now, loan_id),
+    )
+    connection.commit()

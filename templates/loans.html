@@ -37,13 +37,21 @@
 
   <h2>Out now</h2>
   <table>
-    <tr><th>Tool</th><th>Member</th><th>Borrowed</th><th>Due</th></tr>
+    <tr><th>Tool</th><th>Member</th><th>Borrowed</th><th>Due</th><th></th></tr>
     {% for loan in loans %}
     <tr>
       <td>{{ loan.tool_name }}</td>
       <td>{{ loan.member_name }}</td>
       <td>{{ loan.borrowed_at }}</td>
-      <td>{{ loan.due_at }}</td>
+      <td>
+        {{ loan.due_at }}
+        {% if loan.overdue %}Overdue{% endif %}
+      </td>
+      <td>
+        <form method="post" action="/loans/{{ loan.id }}/return">
+          <button type="submit">Return</button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </table>

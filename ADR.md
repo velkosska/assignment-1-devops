@@ -13,3 +13,11 @@ Context: Lend needs two feature domains that could become separate services late
 Decision: Catalog owns writes to the tools table through lend/catalog.py. Loans will own members and loans. retire_tool may read loans only to refuse retiring a tool that is still out.
 Alternatives considered: One module for tools and loans, rejected because Assignment 2 needs a seam to split. A status column on tools updated by both domains, rejected because a return and a catalog edit could disagree about whether the tool is available.
 Consequences: lend/catalog.py does not create loans. The loans code can read whether a tool is retired, and it will change a tool only by calling a catalog function.
+
+## [3]. An open loan is returned_at IS NULL
+Date: 2026-10-05
+Status: Decided
+Context: Catalog and loans share one SQLite file. A tool can be borrowed only once at a time, and a volunteer needs to see which open loans are past due without a second process.
+Decision: loans.tool_id references tools.id and loans.member_id references members.id. The partial unique index one_open_loan_per_tool allows one row per tool where returned_at is null. is_overdue compares due_at with the current time when the loan list is read.
+Alternatives considered: A status or overdue column updated from both domains, rejected because a return and a catalog edit could disagree. A scheduled job that marks loans overdue, rejected because that needs a second process.
+Consequences: return_tool updates loans only. A tool is available again when its open loan row has returned_at set. Overdue is derived, not stored.
