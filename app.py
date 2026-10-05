@@ -4,6 +4,16 @@ from flask import Flask, redirect, render_template, request, url_for
 
 from lend.catalog import CatalogError, ToolIsOut, ToolNotFound, add_tool, list_tools, retire_tool
 from lend.db import connect, database_summary, init_db
+from lend.loans import (
+    LoanError,
+    MemberNotFound,
+    ToolUnavailable,
+    add_member,
+    borrow_tool,
+    list_available_tools,
+    list_members,
+    list_open_loans,
+)
 
 
 def create_app():
@@ -46,6 +56,48 @@ def create_app():
         finally:
             connection.close()
         return redirect(url_for("tools"))
+
+    @app.get("/loans")
+    def loans():
+        connection = connect()
+        try:
+            return render_template(
+                "loans.html",
+                members=list_members(connection),
+                tools=list_available_tools(connection),
+                loans=list_open_loans(connection),
+                error=request.args.get("error"),
+            )
+        finally:
+            connection.close()
+
+    @app.post("/members")
+    def create_member():
+        connection = connect()
+        try:
+            add_member(connection, request.form.get("name", ""), request.form.get("email", ""))
+        except LoanError as error:
+            return redirect(url_for("loans", error=str(error)))
+        finally:
+            connection.close()
+        return redirect(url_for("loans"))
+
+    @app.post("/loans")
+    def create_loan():
+        connection = connect()
+        try:
+            borrow_tool(
+                connection,
+                int(request.form.get("tool_id", "0")),
+                int(request.form.get("member_id", "0")),
+            )
+        except ValueError:
+            return redirect(url_for("loans", error="Choose a member and an available tool."))
+        except (MemberNotFound, ToolUnavailable) as error:
+            return redirect(url_for("loans", error=str(error)))
+        finally:
+            connection.close()
+        return redirect(url_for("loans"))
 
     return app
 
