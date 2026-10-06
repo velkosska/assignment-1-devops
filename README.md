@@ -21,8 +21,10 @@ PORT=8000 DATA_DIR=/tmp/lend python app.py
 
 ## Tests
 
-Coverage is added with the catalog and loan rules. The command will be:
+Core catalog and loan rules are covered at 96%.
 
 ```bash
-pytest --cov=lend --cov-report=term-missing
+pytest --cov=lend.catalog --cov=lend.loans --cov-report=term-missing
 ```
+
+The command covers `lend/catalog.py` and `lend/loans.py`. Route functions in `app.py` are outside that measurement.

@@ -46,13 +46,17 @@ def connect():
 
 
 def init_db():
-    with connect() as connection:
+    connection = connect()
+    try:
         connection.executescript(SCHEMA)
+    finally:
+        connection.close()
 
 
 def database_summary():
     path = database_path()
-    with connect() as connection:
+    connection = connect()
+    try:
         row = connection.execute(
             """
             SELECT
@@ -61,6 +65,8 @@ def database_summary():
               (SELECT COUNT(*) FROM loans) AS loans
             """
         ).fetchone()
+    finally:
+        connection.close()
     return {
         "path": str(path),
         "tools": row["tools"],
