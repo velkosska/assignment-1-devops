@@ -3,7 +3,7 @@ import os
 from flask import Flask, redirect, render_template, request, url_for
 
 from lend.catalog import CatalogError, ToolIsOut, ToolNotFound, add_tool, list_tools, retire_tool
-from lend.db import connect, database_summary, init_db
+from lend.db import connect, database_path, init_db
 from lend.loans import (
     LoanError,
     LoanNotFound,
@@ -12,8 +12,10 @@ from lend.loans import (
     add_member,
     borrow_tool,
     list_available_tools,
+    list_loan_history,
     list_members,
     list_open_loans,
+    repeat_loan,
     return_tool,
 )
 
@@ -21,18 +23,37 @@ from lend.loans import (
 def create_app():
     app = Flask(__name__)
 
+    def render_tools(connection, error=None):
+        open_ids = {loan["tool_id"] for loan in list_open_loans(connection)}
+        return render_template(
+            "tools.html",
+            tools=list_tools(connection),
+            open_ids=open_ids,
+            error=error,
+        )
+
     @app.get("/")
     def home():
-        return render_template("home.html", summary=database_summary())
+        connection = connect()
+        try:
+            open_loans = list_open_loans(connection)
+            desk = {
+                "free": len(list_available_tools(connection)),
+                "out": len(open_loans),
+                "overdue": sum(1 for loan in open_loans if loan["overdue"]),
+                "path": str(database_path()),
+            }
+        finally:
+            connection.close()
+        return render_template("home.html", desk=desk)
 
     @app.get("/tools")
     def tools():
         connection = connect()
         try:
-            items = list_tools(connection)
+            return render_tools(connection, error=request.args.get("error"))
         finally:
             connection.close()
-        return render_template("tools.html", tools=items, error=request.args.get("error"))
 
     @app.post("/tools")
     def create_tool():
@@ -40,8 +61,7 @@ def create_app():
         try:
             add_tool(connection, request.form.get("name", ""), request.form.get("category", ""))
         except CatalogError as error:
-            items = list_tools(connection)
-            return render_template("tools.html", tools=items, error=str(error))
+            return render_tools(connection, error=str(error))
         finally:
             connection.close()
         return redirect(url_for("tools"))
@@ -108,6 +128,29 @@ def create_app():
             return_tool(connection, loan_id)
         except LoanNotFound as error:
             return redirect(url_for("loans", error=str(error)))
+        finally:
+            connection.close()
+        return redirect(url_for("loans"))
+
+    @app.get("/loans/history")
+    def loan_history():
+        connection = connect()
+        try:
+            return render_template(
+                "history.html",
+                loans=list_loan_history(connection),
+                error=request.args.get("error"),
+            )
+        finally:
+            connection.close()
+
+    @app.post("/loans/<int:loan_id>/repeat")
+    def repeat(loan_id):
+        connection = connect()
+        try:
+            repeat_loan(connection, loan_id)
+        except (LoanNotFound, LoanError, ToolUnavailable) as error:
+            return redirect(url_for("loan_history", error=str(error)))
         finally:
             connection.close()
         return redirect(url_for("loans"))

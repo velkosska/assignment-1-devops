@@ -11,8 +11,10 @@ from lend.loans import (
     due_at_for,
     is_overdue,
     list_available_tools,
+    list_loan_history,
     list_members,
     list_open_loans,
+    repeat_loan,
     return_tool,
 )
 
@@ -133,3 +135,49 @@ def test_list_open_loans_marks_a_past_due_loan(db):
     borrow_tool(db, tool_id, member_id, now="2026-09-01T00:00:00+00:00")
     loans = list_open_loans(db, now="2026-10-06T00:00:00+00:00")
     assert loans[0]["overdue"] is True
+    assert loans[0]["tool_id"] == tool_id
+
+
+def test_list_loan_history_includes_only_returned_loans(db):
+    tool_id = insert_tool(db)
+    member_id = add_member(db, "Ada", "ada@example.com")
+    borrow_tool(db, tool_id, member_id, now="2026-10-01T12:00:00+00:00")
+    assert list_loan_history(db) == []
+    return_tool(db, 1, now="2026-10-08T12:00:00+00:00")
+    history = list_loan_history(db)
+    assert history[0]["returned_at"] == "2026-10-08T12:00:00+00:00"
+    assert history[0]["tool_name"] == "Hammer"
+
+
+def test_repeat_loan_inserts_a_new_seven_day_loan(db):
+    tool_id = insert_tool(db)
+    member_id = add_member(db, "Ada", "ada@example.com")
+    borrow_tool(db, tool_id, member_id, now="2026-10-01T12:00:00+00:00")
+    return_tool(db, 1, now="2026-10-08T12:00:00+00:00")
+    repeat_loan(db, 1, now="2026-10-10T12:00:00+00:00")
+    original = db.execute("SELECT returned_at FROM loans WHERE id = 1").fetchone()
+    assert original["returned_at"] == "2026-10-08T12:00:00+00:00"
+    open_loans = list_open_loans(db, now="2026-10-10T12:00:00+00:00")
+    assert len(open_loans) == 1
+    assert open_loans[0]["due_at"] == "2026-10-17T12:00:00+00:00"
+    assert len(list_loan_history(db)) == 1
+
+
+def test_repeat_loan_refuses_a_tool_that_is_already_out(db):
+    tool_id = insert_tool(db)
+    member_id = add_member(db, "Ada", "ada@example.com")
+    borrow_tool(db, tool_id, member_id, now="2026-10-01T12:00:00+00:00")
+    return_tool(db, 1, now="2026-10-08T12:00:00+00:00")
+    repeat_loan(db, 1, now="2026-10-10T12:00:00+00:00")
+    with pytest.raises(ToolUnavailable):
+        repeat_loan(db, 1, now="2026-10-11T12:00:00+00:00")
+
+
+def test_repeat_loan_rejects_an_open_loan_and_an_unknown_id(db):
+    tool_id = insert_tool(db)
+    member_id = add_member(db, "Ada", "ada@example.com")
+    borrow_tool(db, tool_id, member_id, now="2026-10-01T12:00:00+00:00")
+    with pytest.raises(LoanError):
+        repeat_loan(db, 1)
+    with pytest.raises(LoanNotFound):
+        repeat_loan(db, 99)

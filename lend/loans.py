@@ -70,7 +70,7 @@ def list_open_loans(connection, now=None):
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rows = connection.execute(
         """
-        SELECT loans.id, loans.borrowed_at, loans.due_at,
+        SELECT loans.id, loans.tool_id, loans.borrowed_at, loans.due_at,
                tools.name AS tool_name, members.name AS member_name
         FROM loans
         JOIN tools ON tools.id = loans.tool_id
@@ -82,6 +82,7 @@ def list_open_loans(connection, now=None):
     return [
         {
             "id": row["id"],
+            "tool_id": row["tool_id"],
             "tool_name": row["tool_name"],
             "member_name": row["member_name"],
             "borrowed_at": row["borrowed_at"],
@@ -155,3 +156,43 @@ def return_tool(connection, loan_id, now=None):
         (now, loan_id),
     )
     connection.commit()
+
+
+def list_loan_history(connection):
+    rows = connection.execute(
+        """
+        SELECT loans.id, loans.tool_id, loans.member_id,
+               loans.borrowed_at, loans.due_at, loans.returned_at,
+               tools.name AS tool_name, members.name AS member_name
+        FROM loans
+        JOIN tools ON tools.id = loans.tool_id
+        JOIN members ON members.id = loans.member_id
+        WHERE loans.returned_at IS NOT NULL
+        ORDER BY loans.returned_at DESC, loans.id DESC
+        """
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "tool_id": row["tool_id"],
+            "member_id": row["member_id"],
+            "tool_name": row["tool_name"],
+            "member_name": row["member_name"],
+            "borrowed_at": row["borrowed_at"],
+            "due_at": row["due_at"],
+            "returned_at": row["returned_at"],
+        }
+        for row in rows
+    ]
+
+
+def repeat_loan(connection, loan_id, now=None):
+    loan = connection.execute(
+        "SELECT id, tool_id, member_id, returned_at FROM loans WHERE id = ?",
+        (loan_id,),
+    ).fetchone()
+    if loan is None:
+        raise LoanNotFound("That loan does not exist.")
+    if loan["returned_at"] is None:
+        raise LoanError("That loan is still open.")
+    borrow_tool(connection, loan["tool_id"], loan["member_id"], now=now)
