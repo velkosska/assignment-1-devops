@@ -29,3 +29,11 @@ Context: The assignment asks for at least 70% coverage of the core business logi
 Decision: tests/test_catalog.py and tests/test_loans.py call add_tool, retire_tool, borrow_tool, return_tool, and is_overdue on a temporary SQLite file. Coverage is measured with pytest --cov=lend.catalog --cov=lend.loans --cov-report=term-missing, which reported 96%.
 Alternatives considered: Coverage of the whole lend package, including app.py, rejected because untested route functions would make the percentage describe templates more than rules. Tests through the Flask client, rejected because they would repeat the same rules through form parsing.
 Consequences: A change to a borrow, return, retire, or overdue rule fails a test. A broken template can still pass this command.
+
+## [5]. No reminder worker
+Date: 2026-10-08
+Status: Decided
+Context: An open loan past its due date should be visible to the volunteer. A reminder email or a scheduled scan would need a second process, which this assignment does not allow.
+Decision: Do not build a reminder worker. is_overdue compares due_at with the current time when list_open_loans reads the open loans.
+Alternatives considered: A background job that marks loans overdue or sends email, rejected because it needs cron or a worker beside the one web process. A stored overdue column, rejected because it can disagree with the clock.
+Consequences: Overdue shows up only when someone opens the loan list. Returning a tool still clears it, because is_overdue is false once returned_at is set.
