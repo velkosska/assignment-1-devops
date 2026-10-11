@@ -51,25 +51,3 @@ def init_db():
         connection.executescript(SCHEMA)
     finally:
         connection.close()
-
-
-def database_summary():
-    path = database_path()
-    connection = connect()
-    try:
-        row = connection.execute(
-            """
-            SELECT
-              (SELECT COUNT(*) FROM tools) AS tools,
-              (SELECT COUNT(*) FROM members) AS members,
-              (SELECT COUNT(*) FROM loans) AS loans
-            """
-        ).fetchone()
-    finally:
-        connection.close()
-    return {
-        "path": str(path),
-        "tools": row["tools"],
-        "members": row["members"],
-        "loans": row["loans"],
-    }

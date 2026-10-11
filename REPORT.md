@@ -20,6 +20,20 @@ The goals below are the ones the repository actually met.
 
 What this process did not include is a volunteer sitting at the desk and trying the pages. I checked the flows myself: add a tool, retire it, refuse a retire while it is out, borrow, return, and see Overdue on a past due date. That is a developer check, not a user test. The schema below was drawn after those slices, because the tables and the seam between `lend/catalog.py` and `lend/loans.py` were still moving while the features landed.
 
+## One loan, end to end
+
+A volunteer adds a hammer on `/tools`. `add_tool` stores the name, the category, and `retired` as 0. They register a member on `/loans`. `add_member` stores the stripped name and a lowercased email, and rejects a second member with the same email. They lend the hammer. `borrow_tool` starts `BEGIN IMMEDIATE`, checks that the tool exists and is not retired, checks that the member exists, and checks that no loan for that tool still has `returned_at` null. It then inserts one row. `due_at_for` sets `due_at` to `borrowed_at` plus `LOAN_DAYS`, which is 7. The home page counts that hammer as out. `desk["free"]` no longer includes it.
+
+If the hammer is still out after `due_at`, `list_open_loans` calls `is_overdue` and the loans page shows Overdue on that row. Returning the hammer calls `return_tool`, which writes `returned_at` and leaves `tools.retired` at 0. The hammer is free again because `list_available_tools` hides a tool only when it is retired or has an open loan. The returned row shows on `/loans/history`. Repeat posts to `/loans/<id>/repeat`. `repeat_loan` calls `borrow_tool` with the same `tool_id` and `member_id`, so the old `returned_at` stays filled in and a new row is inserted for another seven days.
+
+The same rule is enforced in the database. `test_open_loan_index_rejects_a_second_open_row` inserts one open loan and one already returned loan for the same tool, then a second insert with `returned_at` null raises `sqlite3.IntegrityError`. That failure comes from `one_open_loan_per_tool`. `borrow_tool` also refuses a second open loan in Python, before the insert. The index is the backstop when that check is skipped.
+
+## Startup, and the seam Assignment 2 will use
+
+`python app.py` is the only start command. `main` calls `init_db` before it serves, so a fresh clone creates `$DATA_DIR/lend.db` with no prompt and no migration step. The process binds to `0.0.0.0` and reads `PORT`, which defaults to 5000. `connect` creates the data directory, turns on foreign keys, and returns rows as `sqlite3.Row`. The only dependency manifest is `requirements.txt` at the repo root. The app does not need a Dockerfile, a compose file, or a second process to run.
+
+Assignment 2 can split the two modules along the boundary that already exists. Catalog routes would keep `lend/catalog.py` and the `tools` table. Loan routes would keep `lend/loans.py`, `members`, and `loans`. The shared SQLite file is the part that would become two stores. Until then, `retire_tool` reads `loans` with SQL and does not import `lend/loans.py`. `borrow_tool` reads `tools.retired` through that same file.
+
 ## Architecture
 
 `python app.py` starts one process. The browser talks only to routes in `app.py`. Those routes render Jinja templates and `static/style.css` from the same process. Tool routes call `lend/catalog.py`. Loan, return, history, and repeat routes call `lend/loans.py`. Both modules ask `lend/db.py` for a connection, and that connection opens `$DATA_DIR/lend.db`.
@@ -32,6 +46,6 @@ History is a loans page, not a third domain. `repeat_loan` calls `borrow_tool` i
 
 `lend/db.py` creates three tables in `$DATA_DIR/lend.db`. Catalog owns `tools`. Loans owns `members` and `loans`. There is no history table. A returned loan stays in `loans` with `returned_at` filled in, and repeating it inserts a new row.
 
-`loans.tool_id` references `tools.id`, and `loans.member_id` references `members.id`. One tool and one member can each appear on many loan rows over time. The index `one_open_loan_per_tool` is the extra rule the picture cannot draw: only one row per tool may have an empty `returned_at`. While that field is empty, the tool is out. `is_overdue` compares `due_at` with the current time, so overdue is not a column.
+`loans.tool_id` references `tools.id`, and `loans.member_id` references `members.id`. One tool and one member can each appear on many loan rows over time. The note under the loans table is `one_open_loan_per_tool`: a unique index on `loans(tool_id)` where `returned_at` is null. It is not a column. While `returned_at` is empty, the tool is out. `is_overdue` compares `due_at` with the current time, so overdue is not a column either.
 
 ![Database schema of Lend](docs/schema.png)

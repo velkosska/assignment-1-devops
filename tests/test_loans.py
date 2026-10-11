@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from lend.db import connect, init_db
@@ -84,6 +86,35 @@ def test_borrow_tool_refuses_a_missing_member(db):
     tool_id = insert_tool(db)
     with pytest.raises(MemberNotFound):
         borrow_tool(db, tool_id, 99, now="2026-10-06T12:00:00+00:00")
+
+
+def test_open_loan_index_rejects_a_second_open_row(db):
+    tool_id = insert_tool(db)
+    member_id = add_member(db, "Ada", "ada@example.com")
+    borrowed = "2026-10-06T12:00:00+00:00"
+    due = "2026-10-13T12:00:00+00:00"
+
+    def insert_loan(returned_at):
+        db.execute(
+            """
+            INSERT INTO loans (tool_id, member_id, borrowed_at, due_at, returned_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (tool_id, member_id, borrowed, due, returned_at),
+        )
+
+    insert_loan(None)
+    db.commit()
+    insert_loan("2026-10-07T12:00:00+00:00")
+    db.commit()
+    with pytest.raises(sqlite3.IntegrityError):
+        insert_loan(None)
+    db.rollback()
+    open_rows = db.execute(
+        "SELECT id FROM loans WHERE tool_id = ? AND returned_at IS NULL",
+        (tool_id,),
+    ).fetchall()
+    assert len(open_rows) == 1
 
 
 def test_borrow_tool_refuses_a_second_open_loan(db):
