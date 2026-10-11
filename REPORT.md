@@ -1,6 +1,6 @@
 # Lend
 
-Lend is a one-desk tool library for a volunteer workshop. One location, a few dozen tools, and a few hundred loans a year. One Python process and one SQLite file match that load. This report covers how the app was built. The architecture below matches the running process. The database diagram comes in a later section.
+Lend is a one-desk tool library for a volunteer workshop. One location, a few dozen tools, and a few hundred loans a year. One Python process and one SQLite file match that load. This report covers how the app was built. The architecture and the database diagram below match the running process.
 
 ## SDLC
 
@@ -18,7 +18,7 @@ The goals below are the ones the repository actually met.
 
 **Tests.** By 6 October the command `pytest --cov=lend.catalog --cov=lend.loans --cov-report=term-missing` reports 96% on those two modules. The tests call the domain functions on a temporary SQLite file. They do not go through the Flask routes. ADR-4 records that choice: the graded logic is the rules, and the routes only open a connection and render a template.
 
-What this process did not include is a volunteer sitting at the desk and trying the pages. I checked the flows myself: add a tool, retire it, refuse a retire while it is out, borrow, return, and see Overdue on a past due date. That is a developer check, not a user test. The schema diagram comes after these slices, because the tables and the seam between `lend/catalog.py` and `lend/loans.py` were still moving while the features landed.
+What this process did not include is a volunteer sitting at the desk and trying the pages. I checked the flows myself: add a tool, retire it, refuse a retire while it is out, borrow, return, and see Overdue on a past due date. That is a developer check, not a user test. The schema below was drawn after those slices, because the tables and the seam between `lend/catalog.py` and `lend/loans.py` were still moving while the features landed.
 
 ## Architecture
 
@@ -26,25 +26,12 @@ What this process did not include is a volunteer sitting at the desk and trying 
 
 History is a loans page, not a third domain. `repeat_loan` calls `borrow_tool` inside `lend/loans.py` and inserts a new row. It does not clear `returned_at` on the old loan. `retire_tool` is the only catalog function that reads the `loans` table, and it does that with SQL to refuse a tool that is still out. It does not import `lend/loans.py`. `borrow_tool` reads `tools.retired` the same way, through the shared database file.
 
-```mermaid
-flowchart TB
-  browser[Browser]
-  subgraph process["One Python process, started by python app.py"]
-    app["app.py\nHome, Tools, Loans, History"]
-    templates["Jinja templates and static/style.css"]
-    catalog["lend/catalog.py\nadd_tool, list_tools, retire_tool"]
-    loans["lend/loans.py\nborrow_tool, return_tool, list_loan_history,\nrepeat_loan, is_overdue"]
-    db["lend/db.py\nconnect, init_db"]
-  end
-  sqlite["SQLite file $DATA_DIR/lend.db"]
+![Architecture of Lend](docs/architecture.png)
 
-  browser --> app
-  app --> templates
-  app --> catalog
-  app --> loans
-  catalog --> db
-  loans --> db
-  db --> sqlite
-  catalog -.->|"retire_tool reads open loans"| sqlite
-  loans -.->|"borrow_tool reads tools.retired"| sqlite
-```
+## Database
+
+`lend/db.py` creates three tables in `$DATA_DIR/lend.db`. Catalog owns `tools`. Loans owns `members` and `loans`. There is no history table. A returned loan stays in `loans` with `returned_at` filled in, and repeating it inserts a new row.
+
+`loans.tool_id` references `tools.id`, and `loans.member_id` references `members.id`. One tool and one member can each appear on many loan rows over time. The index `one_open_loan_per_tool` is the extra rule the picture cannot draw: only one row per tool may have an empty `returned_at`. While that field is empty, the tool is out. `is_overdue` compares `due_at` with the current time, so overdue is not a column.
+
+![Database schema of Lend](docs/schema.png)
