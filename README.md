@@ -1,8 +1,8 @@
 # Lend
 
-A one-desk tool library for a volunteer workshop.
+A one-desk tool library for a volunteer workshop. One Python process stores tools, members, and loans in a single SQLite file.
 
-## Run
+## Run on a laptop
 
 ```bash
 python -m venv .venv
@@ -13,11 +13,31 @@ python app.py
 
 Open http://127.0.0.1:5000
 
-The home page shows how many tools are free, out, and overdue, plus the three steps for adding a tool, adding a member, and lending for 7 days. `/tools` adds a tool, lists tools as available, out, or retired, and retires a tool when it has no open loan. `/loans` registers a member, lends an available tool for 7 days, marks a return, and shows Overdue when an open loan is past its due date. `/loans/history` lists returned loans and can repeat one for another 7 days. The process binds to `0.0.0.0`. `PORT` defaults to `5000`. The SQLite file is `$DATA_DIR/lend.db`, and `DATA_DIR` defaults to `data`. Both variables are optional.
+The app reads two environment variables.
+
+| Variable | Default | SQLite path |
+|---|---|---|
+| `PORT` | `5000` | |
+| `DATA_DIR` | `data` | `$DATA_DIR/lend.db`, so `data/lend.db` |
 
 ```bash
 PORT=8000 DATA_DIR=/tmp/lend python app.py
 ```
+
+The home page shows how many tools are free, out, and overdue, plus the three steps for adding a tool, adding a member, and lending for 7 days. `/tools` adds a tool, lists tools as available, out, or retired, and retires a tool when it has no open loan. `/loans` registers a member, lends an available tool for 7 days, marks a return, and shows Overdue when an open loan is past its due date. `/loans/history` lists returned loans and can repeat one for another 7 days. The process binds to `0.0.0.0`.
+
+## Run in the container
+
+`Dockerfile` is the provided template. It sets `PORT=8000` and `DATA_DIR=/data`, copies `app.py`, `lend/`, `templates/`, and `static/`, and starts with `python app.py`.
+
+```bash
+docker build -t lend .
+docker run -p 8000:8000 -v lend-data:/data lend
+```
+
+Open http://127.0.0.1:8000
+
+Inside that container the SQLite file is `/data/lend.db` on the Docker volume `lend-data`. The laptop file `data/lend.db` is a different database. Use the same `-v lend-data:/data` the next time you start the container if you want those rows again.
 
 ## Tests
 
@@ -31,7 +51,7 @@ The command covers `lend/catalog.py` and `lend/loans.py`. Route functions in `ap
 
 ## Container contract
 
-`Dockerfile` at the repo root is the provided template. The image copies `app.py`, `lend/`, `templates/`, and `static/`, and starts with `python app.py`. `container/run.sh` reported:
+`container/run.sh` reported:
 
 ```
 === SDD Assignment 1 contract check ===
