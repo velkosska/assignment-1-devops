@@ -12,7 +12,7 @@ Status: Decided
 Context: Lend needs two feature domains that could become separate services later. Both use the same SQLite file, so the boundary has to live in the code.
 Decision: Catalog owns writes to the tools table through lend/catalog.py. Loans will own members and loans. retire_tool may read loans only to refuse retiring a tool that is still out.
 Alternatives considered: One module for tools and loans, rejected because Assignment 2 needs a seam to split. A status column on tools updated by both domains, rejected because a return and a catalog edit could disagree about whether the tool is available.
-Consequences: lend/catalog.py does not create loans. The loans code can read whether a tool is retired, and it will change a tool only by calling a catalog function.
+Consequences: lend/catalog.py does not create loans. Loans reads tools.retired through the shared database. It does not write the tools table.
 
 ## [3]. An open loan is returned_at IS NULL
 Date: 2026-10-05

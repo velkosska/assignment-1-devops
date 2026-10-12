@@ -6,7 +6,7 @@ Lend is a one-desk tool library for a volunteer workshop. One location, a few do
 
 I used iterative and incremental delivery. The assignment fixed the constraints before any code: one process, SQLite at one path, two feature domains, and a startup command configured only by environment variables. The design of those domains was not fixed up front. Each day shipped one slice that a volunteer could use, or one check that the slice still worked, and the ADR log recorded the decision that slice forced.
 
-A waterfall plan would have written all five ADR entries on the first day and then built to that document. That would have hidden the real order. Catalog existed before anyone could borrow a tool. The rule that a tool out on loan cannot be retired only became concrete once `loans` had a `returned_at` column. Overdue was computed when the loan list was read, which is also why ADR-5 refuses a reminder worker. Those decisions belong on the days they were made.
+A waterfall plan would have written all five ADR entries on the first day and then built to that document. That would have hidden the real order. Catalog existed before anyone could borrow a tool. The rule that a tool out on loan cannot be retired only became concrete once `loans` had a `returned_at` column. Overdue was computed when the loan list was read. ADR-5 then refuses to email the member, because that would need a mailer beside this one process. Those decisions belong on the days they were made.
 
 The goals below are the ones the repository actually met.
 
@@ -30,7 +30,7 @@ The same rule is enforced in the database. `test_open_loan_index_rejects_a_secon
 
 ## Startup, and the seam Assignment 2 will use
 
-`python app.py` is the only start command. `main` calls `init_db` before it serves, so a fresh clone creates `$DATA_DIR/lend.db` with no prompt and no migration step. The process binds to `0.0.0.0` and reads `PORT`, which defaults to 5000. `connect` creates the data directory, turns on foreign keys, and returns rows as `sqlite3.Row`. The only dependency manifest is `requirements.txt` at the repo root. The app does not need a Dockerfile, a compose file, or a second process to run.
+`python app.py` is the only start command. `main` calls `init_db` before it serves, so a fresh clone creates `$DATA_DIR/lend.db` with no prompt and no migration step. The process binds to `0.0.0.0` and reads `PORT`, which defaults to 5000. `connect` creates the data directory, turns on foreign keys, and returns rows as `sqlite3.Row`. The only dependency manifest is `requirements.txt` at the repo root. `python app.py` runs with no Docker file required. The `Dockerfile` in the repo is the provided template: `python:3.12-slim`, `pip install -r requirements.txt`, copies of `app.py`, `lend/`, `templates/`, and `static/`, and `CMD ["python", "app.py"]`.
 
 Assignment 2 can split the two modules along the boundary that already exists. Catalog routes would keep `lend/catalog.py` and the `tools` table. Loan routes would keep `lend/loans.py`, `members`, and `loans`. The shared SQLite file is the part that would become two stores. Until then, `retire_tool` reads `loans` with SQL and does not import `lend/loans.py`. `borrow_tool` reads `tools.retired` through that same file.
 
@@ -49,3 +49,7 @@ History is a loans page, not a third domain. `repeat_loan` calls `borrow_tool` i
 `loans.tool_id` references `tools.id`, and `loans.member_id` references `members.id`. One tool and one member can each appear on many loan rows over time. The note under the loans table is `one_open_loan_per_tool`: a unique index on `loans(tool_id)` where `returned_at` is null. It is not a column. While `returned_at` is empty, the tool is out. `is_overdue` compares `due_at` with the current time, so overdue is not a column either.
 
 ![Database schema of Lend](docs/schema.png)
+
+## AI disclosure
+
+I acknowledge the use of Cursor to draft the Flask app, the tests, the ADR entries, the diagrams, and the container template’s source list. The prompts used include the startup contract, catalog and loans, the history page, the schema figure, and the four Dockerfile TODOs. The output of these prompts was used as the modules under `lend/`, the report figures, and `Dockerfile`. I checked that output against the tests and the container run, and I replaced the first home page with the free, out, and overdue counts.
